@@ -136,14 +136,14 @@ process split_by_chr {
   path snv_results_path
   path bam_split_by_chr_path
   path sorted_bam_path
-  val chr_idx
+  each chr_idx
   output:
-  val "$chr_idx"
+  val "split.done"
   script:
   if("$params.input.SNV_CALL_METHOD" == "clair3")
   """
   tabix -f -p vcf $snv_results_path/$params.common.CLAIR3_VCF_NAME
-  bcftools view -r ${chr_idx} $snv_results_path/$params.common.CLAIR3_VCF_NAME > $vcf_split_by_chr_path/chr${chr_idx}.vcf
+  bcftools view -r chr${chr_idx} $snv_results_path/$params.common.CLAIR3_VCF_NAME > $vcf_split_by_chr_path/chr${chr_idx}.vcf
 
   samtools view -b -h $sorted_bam_path/$params.common.SORTED_BAM_FILE_NAME chr${chr_idx} > $bam_split_by_chr_path/chr${chr_idx}.bam
   samtools index $bam_split_by_chr_path/chr${chr_idx}.bam
@@ -157,9 +157,10 @@ process phase {
   path ref_fn
   path bam_split_by_chr_path
   path vcf_split_by_chr_path
-  val chr_idx
+  each chr_idx
+  val split_done
   output:
-  val "$chr_idx"
+  val "phased.done"
   script:
   """
   samtools faidx $ref_fn
@@ -184,7 +185,8 @@ process haplotag {
   path ref_fn
   path bam_split_by_chr_path
   path phased_vcf_path
-  val chr_idx
+  each chr_idx
+  val phased_done
   output:
 
   script:
@@ -222,15 +224,15 @@ workflow  {
   REF_FN=Channel.fromPath("${params.input.REF_FN}")
   OUTPUT_PATH=Channel.fromPath("${params.input.OUTPUT_PATH}")
 
-  chr_idx = Channel.from(1..22)
+  chr_idx = Channel.fromList([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,'X','Y'])
 
   // align
 
   bam_path = mkdir_bam(OUTPUT_PATH)
 
-  // sam_fn = align(FASTQ_PATH, bam_path)
+  //sam_fn = align(FASTQ_PATH, bam_path)
 
-  // sorted_bam_path = sam_to_bam(bam_path, sam_fn)
+  //sorted_bam_path = sam_to_bam(bam_path, sam_fn)
 
   // call snv
 
@@ -242,17 +244,17 @@ workflow  {
 
   vcf_split_by_chr_path = mkdir_vcf_split_by_chr(OUTPUT_PATH)
 
-  splitted_idx = split_by_chr(vcf_split_by_chr_path, snv_results_path, bam_split_by_chr_path, bam_path, chr_idx)
+  split_done = split_by_chr(vcf_split_by_chr_path, snv_results_path, bam_split_by_chr_path, bam_path, chr_idx)
 
   // phasing
   phased_vcf_path = mkdir_phased_vcf(OUTPUT_PATH)
 
-  phased_idx = phase(phased_vcf_path, REF_FN, bam_split_by_chr_path, vcf_split_by_chr_path, splitted_idx)
+  phased_done = phase(phased_vcf_path, REF_FN, bam_split_by_chr_path, vcf_split_by_chr_path, chr_idx, split_done)
 
   // haplotaging
   haplotag_bam_path = mkdir_haplotag_bam(OUTPUT_PATH)
 
-  haplotag(haplotag_bam_path, REF_FN, bam_split_by_chr_path, phased_vcf_path, phased_idx)
+  haplotag(haplotag_bam_path, REF_FN, bam_split_by_chr_path, phased_vcf_path, chr_idx, phased_done)
 
 
 }   
